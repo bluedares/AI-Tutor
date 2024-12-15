@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Tutor - Your Personal Learning Assistant</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>AI Tutor</h1>
+            <div class="header-actions">
+                <button class="header-button" id="bookmarks-button">
+                    <i class="fas fa-bookmark"></i>
+                </button>
+                <button class="header-button" id="theme-toggle" data-tooltip="Toggle Theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="header-button" id="profile-button" data-tooltip="Profile">
+                    <i class="fas fa-user-circle"></i>
+                </button>
+            </div>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <!-- Messages will be added here -->
+        </div>
+        <div class="input-area">
+            <div class="input-container">
+                <textarea id="message-input" placeholder="Type a message..."></textarea>
+                <button id="send-button">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Sheet for Profile -->
+    <div class="overlay" id="overlay"></div>
+    <div class="bottom-sheet" id="profile-sheet">
+        <div class="bottom-sheet-header">
+            <h2>Pupil Details</h2>
+            <button class="close-button" id="close-sheet">×</button>
+        </div>
+        <form class="profile-form" id="profile-form">
+            <div class="form-group">
+                <label for="name">Pupil Name</label>
+                <input type="text" id="name" placeholder="Enter pupil's name">
+            </div>
+            <div class="form-group">
+                <label for="age">Pupil Age</label>
+                <input type="number" id="age" placeholder="Enter pupil's age">
+            </div>
+            <div class="form-group">
+                <label for="class">Class</label>
+                <input type="text" id="class" placeholder="Enter pupil's class">
+            </div>
+            <div class="form-group">
+                <label for="school">School</label>
+                <input type="text" id="school" placeholder="Enter pupil's school name">
+            </div>
+            <div class="form-group">
+                <label for="parent-name">Parent's Name</label>
+                <input type="text" id="parent-name" placeholder="Enter parent's name">
+            </div>
+            <div class="form-group">
+                <label for="parent-number">Parent's Number</label>
+                <input type="tel" id="parent-number" placeholder="Enter parent's number">
+            </div>
+            <button type="submit" class="save-button">Save Pupil Details</button>
+        </form>
+    </div>
+
+    <!-- Bookmarks Bottom Sheet -->
+    <div id="bookmarks-sheet" class="bottom-sheet">
+        <div class="bottom-sheet-header">
+            <h2>Bookmarks</h2>
+            <button class="close-button">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="bottom-sheet-content">
+            <div id="bookmarks-list"></div>
+            <div id="empty-bookmarks" class="empty-state">
+                <i class="fas fa-bookmark"></i>
+                <p>No bookmarks yet</p>
+                <p class="subtitle">Your saved conversations will appear here</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/theme.js"></script>
+    <script src="assets/js/bookmarks.js"></script>
+    <script src="assets/js/profile.js"></script>
+    <script src="assets/js/chat.js"></script>
+    <script src="assets/js/app.js"></script>
+</body>
+</html>
