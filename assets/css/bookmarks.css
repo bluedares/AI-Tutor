@@ -1,0 +1,128 @@
+/* Bookmark styles that inherit chat theme */
+.bookmarks-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.bookmark-item {
+    position: relative;
+    background: var(--message-bg);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border-color);
+}
+
+.bookmark-item .conversation-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.bookmark-item .message-wrapper {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem;
+    border-radius: 8px;
+}
+
+.bookmark-item .message-wrapper.user {
+    background: var(--user-message-bg);
+    color: var(--user-message-color);
+}
+
+.bookmark-item .message-wrapper.assistant {
+    background: var(--assistant-message-bg);
+    color: var(--assistant-message-color);
+}
+
+.bookmark-item .profile-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    color: currentColor;
+}
+
+.bookmark-item .message-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.bookmark-item .message-content {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.bookmark-item .message-metadata {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.bookmark-item .metadata-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.bookmark-item .message-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.bookmark-item .action-button {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bookmark-item .action-button:hover {
+    background: var(--hover-bg);
+    color: var(--text-color);
+}
+
+.bookmark-item .action-button.active {
+    color: var(--primary-color);
+}
+
+.delete-bookmark {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.delete-bookmark:hover {
+    background: var(--hover-bg);
+    color: var(--danger-color);
+}
+
+.empty-bookmarks {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 2rem;
+    font-style: italic;
+}

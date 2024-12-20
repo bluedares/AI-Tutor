@@ -6,12 +6,17 @@
     <title>AI Tutor - Your Personal Learning Assistant</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="assets/css/chat.css">
+    <link rel="stylesheet" href="assets/css/bookmarks.css">
 </head>
 <body>
     <div class="chat-container">
         <div class="chat-header">
             <h1>AI Tutor</h1>
             <div class="header-actions">
+                <select id="llm-selector" class="llm-selector" title="Select AI Model" aria-label="Select AI Model">
+                    <option value="gpt-3.5-turbo" selected>Loading models...</option>
+                </select>
                 <button class="header-button" id="bookmarks-button">
                     <i class="fas fa-bookmark"></i>
                 </button>
@@ -89,6 +94,7 @@
     </div>
 
     <!-- Scripts -->
+    <script src="assets/js/server.js"></script>
     <script src="assets/js/config.js"></script>
     <script src="assets/js/theme.js"></script>
     <script src="assets/js/bookmarks.js"></script>
