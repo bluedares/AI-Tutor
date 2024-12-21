@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from utils.port_finder import get_server_port
+from backend.utils.port_finder import get_server_port
 
 # Load environment variables
 load_dotenv()
@@ -8,7 +8,7 @@ load_dotenv()
 class Config:
     # Server settings
     HOST = os.getenv('HOST', '0.0.0.0')
-    PORT = int(os.getenv('PORT', 0)) or get_server_port()
+    PORT = 8000  # Fixed port for better reliability
     
     # CORS settings
     CORS_ORIGINS = [

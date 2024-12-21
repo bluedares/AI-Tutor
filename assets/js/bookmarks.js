@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
             this.closeButton = this.bookmarksSheet.querySelector('.close-button');
             console.log('Close button found:', !!this.closeButton);
             
+            // Migrate old bookmarks if needed
+            this.migrateBookmarks();
+            
             // Add test bookmark if none exist
             this.initializeTestBookmark();
             
@@ -45,7 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!existingBookmarks) {
                 const testBookmark = {
                     id: Date.now(),
-                    timestamp: new Date().toISOString(),
                     conversation: {
                         user: {
                             content: "What is the capital of France?",
@@ -55,15 +57,67 @@ document.addEventListener('DOMContentLoaded', () => {
                             content: "The capital of France is Paris. It is also the largest city in France and serves as the country's major cultural, economic, and political center.",
                             role: "assistant",
                             metadata: {
-                                timestamp: new Date().toLocaleString(),
-                                model: "GPT-4"
+                                timestamp: new Date().toISOString(),
+                                model: "gpt-3.5-turbo"
                             }
                         }
                     }
                 };
                 
                 localStorage.setItem('chatBookmarks', JSON.stringify([testBookmark]));
-                console.log('Added test bookmark to localStorage');
+                console.log('Added test bookmark:', testBookmark);
+            }
+        }
+
+        migrateBookmarks() {
+            try {
+                const bookmarksStr = localStorage.getItem('chatBookmarks');
+                if (!bookmarksStr) return;
+
+                const bookmarks = JSON.parse(bookmarksStr);
+                if (!Array.isArray(bookmarks)) return;
+
+                const migratedBookmarks = bookmarks.map(bookmark => {
+                    // Check if bookmark is already in new format
+                    if (bookmark.conversation) {
+                        return bookmark;
+                    }
+
+                    // Convert old format to new format
+                    if (bookmark.messages && Array.isArray(bookmark.messages)) {
+                        const userMessage = bookmark.messages.find(m => m.role === 'user');
+                        const assistantMessage = bookmark.messages.find(m => m.role === 'assistant');
+
+                        if (userMessage && assistantMessage) {
+                            return {
+                                id: bookmark.id || Date.now(),
+                                conversation: {
+                                    user: {
+                                        content: userMessage.content,
+                                        role: 'user'
+                                    },
+                                    assistant: {
+                                        content: assistantMessage.content,
+                                        role: 'assistant',
+                                        metadata: {
+                                            timestamp: bookmark.timestamp || new Date().toISOString(),
+                                            model: assistantMessage.model || 'unknown'
+                                        }
+                                    }
+                                }
+                            };
+                        }
+                    }
+                    return null;
+                }).filter(Boolean); // Remove any null entries
+
+                // Save migrated bookmarks
+                localStorage.setItem('chatBookmarks', JSON.stringify(migratedBookmarks));
+                console.log('Migrated bookmarks:', migratedBookmarks);
+            } catch (error) {
+                console.error('Error migrating bookmarks:', error);
+                // If migration fails, clear bookmarks to prevent further errors
+                localStorage.removeItem('chatBookmarks');
             }
         }
 
@@ -123,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Raw bookmarks from storage:', bookmarksJson);
                 
                 // Parse bookmarks
-                const bookmarks = bookmarksJson ? JSON.parse(bookmarksJson) : [];
+                const bookmarks = this.getBookmarks();
                 console.log('Parsed bookmarks:', bookmarks);
                 
                 // Clear current list
@@ -143,19 +197,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.emptyState.style.display = 'none';
                 this.bookmarksList.style.display = 'block';
 
+                // Sort bookmarks by timestamp in reverse chronological order
+                const sortedBookmarks = bookmarks.sort((a, b) => {
+                    const timeA = new Date(a.conversation.assistant.metadata.timestamp).getTime();
+                    const timeB = new Date(b.conversation.assistant.metadata.timestamp).getTime();
+                    return timeB - timeA; // Reverse chronological order
+                });
+
                 // Create bookmark elements
-                bookmarks.forEach((bookmark, index) => {
-                    try {
-                        console.log(`Processing bookmark ${index}:`, bookmark);
-                        const bookmarkEl = this.createBookmarkElement(bookmark);
-                        if (bookmarkEl) {
-                            this.bookmarksList.appendChild(bookmarkEl);
-                            console.log(`Added bookmark ${index + 1} to DOM`);
-                        } else {
-                            console.error(`Failed to create element for bookmark ${index}`);
-                        }
-                    } catch (err) {
-                        console.error(`Error processing bookmark ${index}:`, err);
+                sortedBookmarks.forEach((bookmark, index) => {
+                    if (this.isValidBookmark(bookmark)) {
+                        const bookmarkElement = this.createBookmarkElement(bookmark);
+                        this.bookmarksList.appendChild(bookmarkElement);
+                    } else {
+                        console.error('Invalid bookmark found:', bookmark);
                     }
                 });
                 
@@ -167,208 +222,218 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         createBookmarkElement(bookmark) {
-            console.log('Creating bookmark element for:', bookmark);
-            
-            if (!this.isValidBookmark(bookmark)) {
-                return null;
-            }
+            try {
+                if (!this.isValidBookmark(bookmark)) {
+                    console.error('Failed to create element for bookmark', bookmark.id);
+                    return null;
+                }
 
-            const bookmarkItem = document.createElement('div');
-            bookmarkItem.className = 'bookmark-item';
-            bookmarkItem.style.position = 'relative';
-            bookmarkItem.style.background = 'var(--container-bg)';
-            bookmarkItem.style.borderRadius = '8px';
-            bookmarkItem.style.marginBottom = '0.75rem';
-            bookmarkItem.style.border = '1px solid var(--border-color)';
+                const bookmarkElement = document.createElement('div');
+                bookmarkElement.className = 'conversation-container';
+                bookmarkElement.setAttribute('data-bookmark-id', bookmark.id);
 
-            const conversation = document.createElement('div');
-            conversation.className = 'conversation-container';
-            conversation.style.display = 'flex';
-            conversation.style.flexDirection = 'column';
-            conversation.style.gap = '0.5rem';
-            conversation.style.background = 'var(--container-bg)';
+                // User message
+                const userWrapper = document.createElement('div');
+                userWrapper.className = 'message-wrapper user';
+                userWrapper.style.backgroundColor = 'rgb(66, 133, 244)';
 
-            const userMessage = this.createMessageElement(
-                bookmark.conversation.user.content,
-                'user'
-            );
-            conversation.appendChild(userMessage);
+                // User profile icon
+                const userProfileIcon = document.createElement('div');
+                userProfileIcon.className = 'profile-icon';
+                userProfileIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
+                userWrapper.appendChild(userProfileIcon);
 
-            const assistantMessage = this.createMessageElement(
-                bookmark.conversation.assistant.content,
-                'assistant',
-                bookmark.conversation.assistant.metadata
-            );
-            conversation.appendChild(assistantMessage);
+                // User message container
+                const userMessageContainer = document.createElement('div');
+                userMessageContainer.className = 'message-container';
+                const userContent = document.createElement('div');
+                userContent.className = 'message-content';
+                userContent.textContent = bookmark.conversation.user.content;
+                userContent.style.color = '#ffffff';
+                userMessageContainer.appendChild(userContent);
+                userWrapper.appendChild(userMessageContainer);
 
-            bookmarkItem.appendChild(conversation);
-            console.log('Successfully created bookmark element');
-            return bookmarkItem;
-        }
+                // Assistant message
+                const assistantWrapper = document.createElement('div');
+                assistantWrapper.className = 'message-wrapper assistant';
+                assistantWrapper.style.backgroundColor = 'rgb(45, 45, 45)';
 
-        createMessageElement(content, role, metadata = null) {
-            const wrapper = document.createElement('div');
-            wrapper.className = `message-wrapper ${role}`;
-            wrapper.style.display = 'flex';
-            wrapper.style.gap = '0.75rem';
-            wrapper.style.padding = '0.75rem';
-            wrapper.style.color = 'var(--text-color)';
-            wrapper.style.borderRadius = '6px';
-            
-            // Set background color based on role and theme
-            if (role === 'user') {
-                wrapper.style.background = 'var(--message-user-bg)'; // Light: #dcf8c6, Dark: #1e3a5f
-            } else {
-                wrapper.style.background = 'var(--message-bot-bg)'; // Light: #e8e8e8, Dark: #424242
-            }
-
-            // Add profile icon with reduced size
-            const profileIcon = document.createElement('div');
-            profileIcon.className = 'profile-icon';
-            profileIcon.style.width = '28px';
-            profileIcon.style.height = '28px';
-            profileIcon.style.flexShrink = '0';
-            profileIcon.style.color = 'var(--text-color)';
-            profileIcon.style.background = role === 'user' ? 'var(--message-user-bg)' : 'var(--message-bot-bg)';
-            if (role === 'user') {
-                profileIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
-            } else if (role === 'assistant') {
-                profileIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                // Assistant profile icon
+                const assistantProfileIcon = document.createElement('div');
+                assistantProfileIcon.className = 'profile-icon';
+                assistantProfileIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <circle cx="12" cy="12" r="9"/>
                     <circle cx="9" cy="10" r="1.5" fill="currentColor"/>
                     <circle cx="15" cy="10" r="1.5" fill="currentColor"/>
                     <path d="M9 15h6"/>
                     <path d="M7 8h10"/>
                 </svg>`;
-            }
-            wrapper.appendChild(profileIcon);
+                assistantWrapper.appendChild(assistantProfileIcon);
 
-            // Create message content container
-            const messageContainer = document.createElement('div');
-            messageContainer.className = 'message-container';
-            messageContainer.style.flex = '1';
-            messageContainer.style.display = 'flex';
-            messageContainer.style.flexDirection = 'column';
-            messageContainer.style.gap = '0.375rem';
+                // Assistant message container
+                const assistantMessageContainer = document.createElement('div');
+                assistantMessageContainer.className = 'message-container';
+                
+                // Assistant content
+                const assistantContent = document.createElement('div');
+                assistantContent.className = 'message-content';
+                assistantContent.textContent = bookmark.conversation.assistant.content;
+                assistantContent.style.color = '#ffffff';
+                assistantMessageContainer.appendChild(assistantContent);
 
-            // Create message content
-            const messageContent = document.createElement('div');
-            messageContent.className = 'message-content';
-            messageContent.textContent = content;
-            messageContent.style.whiteSpace = 'pre-wrap';
-            messageContent.style.wordBreak = 'break-word';
-            messageContent.style.fontSize = '0.9375rem';
-            messageContent.style.color = 'var(--text-color)';
-            messageContainer.appendChild(messageContent);
-
-            // Add metadata and actions only for assistant messages
-            if (role === 'assistant' && metadata) {
+                // Metadata section
                 const metadataEl = document.createElement('div');
                 metadataEl.className = 'message-metadata';
+                metadataEl.style.color = 'rgb(163, 163, 163)';
                 metadataEl.style.display = 'flex';
                 metadataEl.style.justifyContent = 'space-between';
                 metadataEl.style.alignItems = 'center';
-                metadataEl.style.marginTop = '0.375rem';
-                metadataEl.style.paddingTop = '0.375rem';
-                metadataEl.style.borderTop = '1px solid var(--border-color)';
+                metadataEl.style.marginTop = '8px';
+                metadataEl.style.paddingTop = '8px';
+                metadataEl.style.borderTop = '1px solid rgba(255, 255, 255, 0.1)';
 
+                // Metadata left section
                 const metadataLeft = document.createElement('div');
                 metadataLeft.className = 'metadata-left';
                 metadataLeft.style.display = 'flex';
+                metadataLeft.style.gap = '8px';
                 metadataLeft.style.alignItems = 'center';
-                metadataLeft.style.gap = '0.375rem';
-                metadataLeft.style.color = 'var(--metadata-color)';
-                metadataLeft.style.fontSize = '0.8125rem';
+                metadataLeft.style.fontSize = '14px';
 
+                // Model info
                 const model = document.createElement('span');
                 model.className = 'message-model';
-                model.textContent = `Model: ${metadata.model || 'default'}`;
+                model.textContent = `Model: ${bookmark.conversation.assistant.metadata.model}`;
                 metadataLeft.appendChild(model);
 
+                // Separator
                 const separator = document.createElement('span');
-                separator.className = 'metadata-separator';
-                separator.textContent = ' • ';
+                separator.textContent = '•';
+                separator.style.color = 'rgb(163, 163, 163)';
                 metadataLeft.appendChild(separator);
 
+                // Timestamp
                 const timestamp = document.createElement('span');
                 timestamp.className = 'message-timestamp';
-                timestamp.textContent = metadata.timestamp;
+                const date = new Date(bookmark.conversation.assistant.metadata.timestamp);
+                timestamp.textContent = date.toLocaleString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }).replace(',', '');
                 metadataLeft.appendChild(timestamp);
 
                 metadataEl.appendChild(metadataLeft);
 
+                // Action buttons
                 const actions = document.createElement('div');
                 actions.className = 'message-actions';
                 actions.style.display = 'flex';
-                actions.style.gap = '0.375rem';
+                actions.style.gap = '8px';
 
+                // Copy button
                 const copyBtn = document.createElement('button');
                 copyBtn.className = 'action-button';
-                copyBtn.style.background = 'none';
-                copyBtn.style.border = 'none';
-                copyBtn.style.padding = '0.25rem';
-                copyBtn.style.cursor = 'pointer';
-                copyBtn.style.color = 'var(--action-button-color)';
-                copyBtn.style.borderRadius = '4px';
-                copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>';
-                copyBtn.title = 'Copy';
-                copyBtn.onmouseover = () => {
-                    copyBtn.style.background = 'var(--action-button-hover)';
-                };
-                copyBtn.onmouseout = () => {
-                    copyBtn.style.background = 'none';
-                };
+                copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.242a2 2 0 0 0-.602-1.43L16.083 2.57A2 2 0 0 0 14.685 2H10a2 2 0 0 0-2 2z"/><path d="M16 18v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2"/></svg>';
+                copyBtn.title = 'Copy conversation';
                 copyBtn.onclick = () => {
-                    navigator.clipboard.writeText(content);
-                    copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>';
+                    const text = `User: ${bookmark.conversation.user.content}\n\nAssistant: ${bookmark.conversation.assistant.content}`;
+                    navigator.clipboard.writeText(text);
+                    copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>';
                     setTimeout(() => {
-                        copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>';
+                        copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.242a2 2 0 0 0-.602-1.43L16.083 2.57A2 2 0 0 0 14.685 2H10a2 2 0 0 0-2 2z"/><path d="M16 18v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2"/></svg>';
                     }, 2000);
                 };
                 actions.appendChild(copyBtn);
 
-                metadataEl.appendChild(actions);
-                messageContainer.appendChild(metadataEl);
-            }
+                // Delete button
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'action-button';
+                deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
+                deleteBtn.title = 'Delete bookmark';
+                deleteBtn.onclick = () => {
+                    this.removeBookmark(bookmark.id);
+                };
+                actions.appendChild(deleteBtn);
 
-            wrapper.appendChild(messageContainer);
-            return wrapper;
+                metadataEl.appendChild(actions);
+                assistantMessageContainer.appendChild(assistantContent);
+                assistantMessageContainer.appendChild(metadataEl);
+                assistantWrapper.appendChild(assistantMessageContainer);
+
+                // Add all elements to bookmark
+                bookmarkElement.appendChild(userWrapper);
+                bookmarkElement.appendChild(assistantWrapper);
+
+                return bookmarkElement;
+            } catch (error) {
+                console.error('Error creating bookmark element:', error);
+                return null;
+            }
         }
 
         isValidBookmark(bookmark) {
-            const valid = bookmark 
-                && bookmark.conversation
-                && bookmark.conversation.user
-                && bookmark.conversation.user.content
-                && bookmark.conversation.assistant
-                && bookmark.conversation.assistant.content
-                && bookmark.conversation.assistant.metadata
-                && bookmark.conversation.assistant.metadata.model
-                && bookmark.conversation.assistant.metadata.timestamp;
-                
-            if (!valid) {
-                console.error('Invalid bookmark structure:', {
-                    hasBookmark: !!bookmark,
-                    hasConversation: !!bookmark?.conversation,
-                    hasUser: !!bookmark?.conversation?.user,
-                    hasUserContent: !!bookmark?.conversation?.user?.content,
-                    hasAssistant: !!bookmark?.conversation?.assistant,
-                    hasAssistantContent: !!bookmark?.conversation?.assistant?.content,
-                    hasMetadata: !!bookmark?.conversation?.assistant?.metadata,
-                    hasModel: !!bookmark?.conversation?.assistant?.metadata?.model,
-                    hasTimestamp: !!bookmark?.conversation?.assistant?.metadata?.timestamp
-                });
+            try {
+                if (!bookmark || typeof bookmark !== 'object') {
+                    console.error('Bookmark is not an object:', bookmark);
+                    return false;
+                }
+
+                if (!bookmark.id || !bookmark.conversation) {
+                    console.error('Bookmark missing required fields:', bookmark);
+                    return false;
+                }
+
+                const { user, assistant } = bookmark.conversation;
+
+                if (!user || !assistant) {
+                    console.error('Bookmark missing user or assistant:', bookmark.conversation);
+                    return false;
+                }
+
+                if (!user.content || user.role !== 'user') {
+                    console.error('Invalid user message:', user);
+                    return false;
+                }
+
+                if (!assistant.content || assistant.role !== 'assistant' || !assistant.metadata) {
+                    console.error('Invalid assistant message:', assistant);
+                    return false;
+                }
+
+                const { metadata } = assistant;
+                if (!metadata.timestamp || !metadata.model) {
+                    console.error('Invalid metadata:', metadata);
+                    return false;
+                }
+
+                return true;
+            } catch (error) {
+                console.error('Error validating bookmark:', error);
+                return false;
             }
-            
-            return valid;
         }
 
         removeBookmark(id) {
             console.log('Removing bookmark:', id);
-            let bookmarks = JSON.parse(localStorage.getItem('chatBookmarks') || '[]');
+            let bookmarks = this.getBookmarks();
             bookmarks = bookmarks.filter(b => b.id !== id);
             localStorage.setItem('chatBookmarks', JSON.stringify(bookmarks));
             this.updateBookmarksList();
+        }
+
+        getBookmarks() {
+            try {
+                const bookmarks = JSON.parse(localStorage.getItem('chatBookmarks') || '[]');
+                return Array.isArray(bookmarks) ? bookmarks : [];
+            } catch (error) {
+                console.error('Error getting bookmarks:', error);
+                return [];
+            }
         }
     }
 

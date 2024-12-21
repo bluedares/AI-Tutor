@@ -18,13 +18,19 @@ class LLMConfig:
         self.models["test_mode"] = None  # Special handling for test mode
 
         # Initialize OpenAI models
-        if os.getenv("OPENAI_API_KEY"):
+        api_key = os.getenv("OPENAI_API_KEY")
+        print(f"OpenAI API Key present: {bool(api_key)}")
+        if api_key:
             try:
-                self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                print("Initializing OpenAI client...")
+                self.client = OpenAI(api_key=api_key)
                 self.models["gpt-3.5-turbo"] = "gpt-3.5-turbo"
                 self.models["gpt-4"] = "gpt-4"
+                print(f"Available models: {list(self.models.keys())}")
             except Exception as e:
                 print(f"Error initializing OpenAI models: {e}")
+        else:
+            print("No OpenAI API key found in environment")
 
     def get_model(self, model_name: str) -> Optional[str]:
         """Get a specific model by name."""
@@ -32,7 +38,7 @@ class LLMConfig:
 
     def get_available_models(self) -> List[str]:
         """Get list of available models."""
-        return [model for model in self.models.keys() if model != "test_mode"]
+        return list(self.models.keys())  # Return all models including test_mode
 
     def get_test_response(self, message: str) -> str:
         """Get a test response for development/testing."""
@@ -47,9 +53,15 @@ class LLMConfig:
             response = self.client.chat.completions.create(
                 model=model_name,
                 messages=messages,
-                temperature=0.7
+                temperature=0.7,
+                max_tokens=2000
             )
             return response.choices[0].message.content
         except Exception as e:
-            print(f"Error in chat completion: {e}")
-            raise e
+            print(f"Error getting chat completion: {e}")
+            raise
+
+    async def get_chat_response(self, model_name: str, message: str) -> str:
+        """Get a chat response for a single message."""
+        messages = [{"role": "user", "content": message}]
+        return self.get_chat_completion(model_name, messages)

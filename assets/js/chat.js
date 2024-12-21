@@ -40,6 +40,48 @@ class ChatManager {
         this.messageInput.disabled = false;
         this.sendButton.disabled = false;
         
+        // Setup input and button styling
+        this.messageInput.placeholder = 'Type your message...';
+        this.messageInput.style.padding = '12px';
+        this.messageInput.style.borderRadius = '8px';
+        this.messageInput.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+        this.messageInput.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+        this.messageInput.style.color = '#fff';
+        this.messageInput.style.fontSize = '14px';
+        this.messageInput.style.lineHeight = '1.5';
+        this.messageInput.style.resize = 'none';
+        this.messageInput.style.transition = 'border-color 0.2s ease';
+        
+        this.sendButton.style.padding = '8px';
+        this.sendButton.style.borderRadius = '8px';
+        this.sendButton.style.border = 'none';
+        this.sendButton.style.backgroundColor = 'rgb(66, 133, 244)';
+        this.sendButton.style.color = '#fff';
+        this.sendButton.style.cursor = 'pointer';
+        this.sendButton.style.transition = 'background-color 0.2s ease';
+        this.sendButton.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13"/>
+                <path d="M22 2L15 22L11 13L2 9L22 2"/>
+            </svg>
+        `;
+        
+        // Add hover effect
+        this.sendButton.addEventListener('mouseover', () => {
+            this.sendButton.style.backgroundColor = 'rgb(86, 153, 255)';
+        });
+        this.sendButton.addEventListener('mouseout', () => {
+            this.sendButton.style.backgroundColor = 'rgb(66, 133, 244)';
+        });
+        
+        // Add focus effect for input
+        this.messageInput.addEventListener('focus', () => {
+            this.messageInput.style.borderColor = 'rgb(66, 133, 244)';
+        });
+        this.messageInput.addEventListener('blur', () => {
+            this.messageInput.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+        });
+        
         // Add event listeners
         this.sendButton.addEventListener('click', () => this.handleSendMessage());
         this.messageInput.addEventListener('keypress', (e) => {
@@ -131,18 +173,75 @@ class ChatManager {
     }
 
     updateModelSelector() {
+        // Clear existing options
         this.llmSelector.innerHTML = '';
-        this.availableModels.forEach(model => {
+
+        // Define model order priority
+        const modelOrder = {
+            'gpt-3.5-turbo': 1,
+            'gpt-4': 2,
+            'gemini': 3,
+            'test_mode': 999 // Always last
+        };
+
+        // Sort models according to priority
+        const sortedModels = [...this.availableModels].sort((a, b) => {
+            const modelA = a.toLowerCase();
+            const modelB = b.toLowerCase();
+            
+            // Handle test_mode specially
+            if (modelA.includes('test_mode')) return 1;
+            if (modelB.includes('test_mode')) return -1;
+            
+            // Get priority for each model
+            const priorityA = modelOrder[modelA] || 
+                            (modelA.includes('gpt') ? 4 : 5);
+            const priorityB = modelOrder[modelB] || 
+                            (modelB.includes('gpt') ? 4 : 5);
+            
+            // Sort by priority
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+            
+            // If same priority, sort alphabetically
+            return a.localeCompare(b);
+        });
+
+        // Add options to selector
+        let hasTestMode = false;
+        sortedModels.forEach(model => {
+            if (model.toLowerCase().includes('test_mode')) {
+                hasTestMode = true;
+                return;
+            }
             const option = document.createElement('option');
             option.value = model;
             option.textContent = this.getModelDisplayName(model);
             this.llmSelector.appendChild(option);
         });
-        
-        if (this.availableModels.length > 0) {
-            this.selectedModel = this.availableModels[0];
+
+        // Add separator and test_mode if present
+        if (hasTestMode) {
+            const separator = document.createElement('option');
+            separator.disabled = true;
+            separator.textContent = '──────────';
+            this.llmSelector.appendChild(separator);
+
+            const testOption = document.createElement('option');
+            testOption.value = 'test_mode';
+            testOption.textContent = this.getModelDisplayName('test_mode');
+            this.llmSelector.appendChild(testOption);
+        }
+
+        // Select first model by default if none selected
+        if (!this.selectedModel && sortedModels.length > 0) {
+            this.selectedModel = sortedModels[0];
             this.llmSelector.value = this.selectedModel;
         }
+
+        // Enable selector if models are available
+        this.llmSelector.disabled = sortedModels.length === 0;
     }
 
     getModelDisplayName(model) {
@@ -157,19 +256,52 @@ class ChatManager {
         const message = this.messageInput.value.trim();
         if (!message) return;
 
-        try {
-            // Add user message immediately
-            this.addMessage(message, 'user');
-            this.messageInput.value = '';
+        // Clear input and disable
+        this.messageInput.value = '';
+        this.messageInput.disabled = true;
+        this.sendButton.disabled = true;
+        this.sendButton.innerHTML = `
+            <svg class="loading-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle class="spinner" cx="12" cy="12" r="10"/>
+            </svg>
+        `;
 
-            // If models aren't loaded yet, try to load them
-            if (this.availableModels.length === 0 && !this.isModelLoading) {
-                await this.loadAvailableModels();
-            }
+        try {
+            // Add user message
+            this.addMessage(message, 'user');
+
+            // Add loading message
+            const loadingContainer = document.createElement('div');
+            loadingContainer.className = 'message-wrapper assistant';
+            loadingContainer.innerHTML = `
+                <div class="profile-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="9"/>
+                        <circle cx="9" cy="10" r="1.5" fill="currentColor"/>
+                        <circle cx="15" cy="10" r="1.5" fill="currentColor"/>
+                        <path d="M9 15h6"/>
+                        <path d="M7 8h10"/>
+                    </svg>
+                </div>
+                <div class="message-container">
+                    <div class="message-content">
+                        <div class="loading-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            this.chatMessages.appendChild(loadingContainer);
+            this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
 
             // Use first available model if none selected
             const model = this.llmSelector.value || this.availableModels[0] || 'gpt-3.5-turbo';
             
+            // Record start time
+            const startTime = Date.now();
+
             const response = await fetch(`${window.CONFIG.api.baseUrl}${window.CONFIG.api.endpoints.chat}`, {
                 method: 'POST',
                 headers: {
@@ -184,35 +316,65 @@ class ChatManager {
                 })
             });
 
+            // Calculate response time
+            const responseTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+            // Remove loading message
+            loadingContainer.remove();
+
             if (!response.ok) {
                 const errorData = await response.json();
                 console.error('Server error:', errorData);
-                throw new Error(errorData.detail || 'Failed to send message');
+                this.addMessage('Sorry, there was an error processing your request. Please try again.', 'assistant', {
+                    timestamp: new Date().toLocaleString(),
+                    model: model,
+                    responseTime: responseTime + 's'
+                });
+                return;
             }
 
             const data = await response.json();
-            this.addMessage(data.content, 'assistant');
+            this.addMessage(data.content, 'assistant', {
+                timestamp: new Date().toLocaleString(),
+                model: model,
+                responseTime: responseTime + 's'
+            });
+
         } catch (error) {
-            console.error('Error sending message:', error);
-            this.addMessage(`Error: ${error.message}. Please try again.`, 'error');
+            console.error('Error:', error);
+            this.addMessage('Sorry, there was an error processing your request. Please try again.', 'assistant', {
+                timestamp: new Date().toLocaleString(),
+                model: model || 'unknown',
+                responseTime: 'error'
+            });
+        } finally {
+            // Re-enable input and button
+            this.messageInput.disabled = false;
+            this.sendButton.disabled = false;
+            this.sendButton.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 2L11 13"/>
+                    <path d="M22 2L15 22L11 13L2 9L22 2"/>
+                </svg>
+            `;
+            this.messageInput.focus();
         }
     }
 
-    addMessage(content, role) {
-        let conversationContainer;
-        
-        if (role === 'user') {
-            // Create new conversation container for user message
+    addMessage(content, role, metadata = null) {
+        // Check if we need to create a new conversation container
+        let conversationContainer = this.chatMessages.querySelector('.conversation-container:last-child');
+        const isNewConversation = !conversationContainer || 
+            (role === 'user' && conversationContainer.querySelector('.message-wrapper.assistant'));
+
+        if (isNewConversation) {
             conversationContainer = document.createElement('div');
             conversationContainer.className = 'conversation-container';
             this.chatMessages.appendChild(conversationContainer);
-        } else {
-            // Get the last conversation container for assistant/error message
-            conversationContainer = this.chatMessages.lastElementChild;
         }
 
-        const messageWrapper = document.createElement('div');
-        messageWrapper.className = `message-wrapper ${role}`;
+        const wrapper = document.createElement('div');
+        wrapper.className = `message-wrapper ${role}`;
 
         // Add profile icon
         const profileIcon = document.createElement('div');
@@ -228,53 +390,57 @@ class ChatManager {
                 <path d="M7 8h10"/>
             </svg>`;
         }
-        messageWrapper.appendChild(profileIcon);
+        wrapper.appendChild(profileIcon);
 
-        // Create message content container
+        // Create message container
         const messageContainer = document.createElement('div');
         messageContainer.className = 'message-container';
 
-        // Create message content
+        // Add content
         const messageContent = document.createElement('div');
         messageContent.className = 'message-content';
         messageContent.textContent = content;
         messageContainer.appendChild(messageContent);
 
-        // Add metadata and actions only for assistant messages
-        if (role === 'assistant') {
-            // Create metadata container
-            const metadata = document.createElement('div');
-            metadata.className = 'message-metadata';
-            
-            // Create left side container for timestamp and model
+        // Add metadata for assistant messages
+        if (role === 'assistant' && metadata) {
+            const metadataEl = document.createElement('div');
+            metadataEl.className = 'message-metadata';
+
             const metadataLeft = document.createElement('div');
             metadataLeft.className = 'metadata-left';
 
-            // Add model name first
             const model = document.createElement('span');
             model.className = 'message-model';
-            model.textContent = `Model: ${this.llmSelector.value || 'default'}`;
+            model.textContent = `Model: ${metadata.model}`;
             metadataLeft.appendChild(model);
 
-            // Add bullet separator
-            const separator = document.createElement('span');
-            separator.className = 'metadata-separator';
-            separator.textContent = ' • ';
-            metadataLeft.appendChild(separator);
+            const separator1 = document.createElement('span');
+            separator1.className = 'metadata-separator';
+            separator1.textContent = ' • ';
+            metadataLeft.appendChild(separator1);
 
-            // Add timestamp
             const timestamp = document.createElement('span');
             timestamp.className = 'message-timestamp';
-            const now = new Date();
-            timestamp.textContent = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+            timestamp.textContent = metadata.timestamp;
             metadataLeft.appendChild(timestamp);
 
-            metadata.appendChild(metadataLeft);
+            if (metadata.responseTime) {
+                const separator2 = document.createElement('span');
+                separator2.className = 'metadata-separator';
+                separator2.textContent = ' • ';
+                metadataLeft.appendChild(separator2);
 
-            // Add action buttons container
+                const responseTime = document.createElement('span');
+                responseTime.className = 'message-response-time';
+                responseTime.textContent = `Response time: ${metadata.responseTime}`;
+                metadataLeft.appendChild(responseTime);
+            }
+
+            metadataEl.appendChild(metadataLeft);
+
             const actions = document.createElement('div');
             actions.className = 'message-actions';
-            metadata.appendChild(actions);
 
             // Like button
             const likeBtn = document.createElement('button');
@@ -302,52 +468,58 @@ class ChatManager {
             };
             actions.appendChild(dislikeBtn);
 
-            // Save/Bookmark button
-            const saveBtn = document.createElement('button');
-            saveBtn.className = 'action-button';
-            saveBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>';
-            saveBtn.title = 'Save to Bookmarks';
-            saveBtn.onclick = () => {
-                saveBtn.classList.toggle('active');
-                this.saveToBookmarks(this.chatMessages);
-            };
-            actions.appendChild(saveBtn);
-
             // Copy button
             const copyBtn = document.createElement('button');
             copyBtn.className = 'action-button';
-            copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>';
-            copyBtn.title = 'Copy';
+            copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.242a2 2 0 0 0-.602-1.43L16.083 2.57A2 2 0 0 0 14.685 2H10a2 2 0 0 0-2 2z"/><path d="M16 18v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2"/></svg>';
+            copyBtn.title = 'Copy message';
             copyBtn.onclick = () => {
                 navigator.clipboard.writeText(content);
-                copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>';
+                copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>';
                 setTimeout(() => {
-                    copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>';
+                    copyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.242a2 2 0 0 0-.602-1.43L16.083 2.57A2 2 0 0 0 14.685 2H10a2 2 0 0 0-2 2z"/><path d="M16 18v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2"/></svg>';
                 }, 2000);
             };
             actions.appendChild(copyBtn);
 
-            messageContainer.appendChild(metadata);
+            // Save button
+            const saveBtn = document.createElement('button');
+            saveBtn.className = 'action-button';
+            saveBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>';
+            saveBtn.title = 'Save';
+            saveBtn.onclick = () => {
+                saveBtn.classList.toggle('active');
+                if (saveBtn.classList.contains('active')) {
+                    this.saveToBookmarks(wrapper.closest('.conversation-container'));
+                }
+            };
+            actions.appendChild(saveBtn);
+
+            metadataEl.appendChild(actions);
+            messageContainer.appendChild(metadataEl);
         }
 
-        messageWrapper.appendChild(messageContainer);
-        conversationContainer.appendChild(messageWrapper);
+        wrapper.appendChild(messageContainer);
+        conversationContainer.appendChild(wrapper);
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }
 
     saveToBookmarks(container) {
         try {
-            // Get the latest conversation
-            const latestConversation = container.querySelector('.conversation-container:last-child');
-            if (!latestConversation) {
+            // If container is null, get the last conversation from chat messages
+            if (!container) {
+                container = this.chatMessages.querySelector('.conversation-container:last-child');
+            }
+            
+            if (!container) {
                 console.error('No conversation found to save');
                 this.showNotification('No messages to save', 'error');
                 return false;
             }
 
             // Get user and assistant messages
-            const userMessage = latestConversation.querySelector('.message-wrapper.user');
-            const assistantMessage = latestConversation.querySelector('.message-wrapper.assistant');
+            const userMessage = container.querySelector('.message-wrapper.user');
+            const assistantMessage = container.querySelector('.message-wrapper.assistant');
             
             if (!userMessage || !assistantMessage) {
                 console.error('Incomplete conversation');
@@ -355,16 +527,19 @@ class ChatManager {
                 return false;
             }
 
-            // Extract content and metadata
+            // Get message contents
             const userContent = userMessage.querySelector('.message-content').textContent;
             const assistantContent = assistantMessage.querySelector('.message-content').textContent;
-            const model = assistantMessage.querySelector('.message-model').textContent.replace('Model: ', '');
-            const timestamp = assistantMessage.querySelector('.message-timestamp').textContent;
+            
+            // Get metadata
+            const metadata = {
+                timestamp: new Date().toISOString(),
+                model: this.selectedModel || 'unknown'
+            };
 
             // Create bookmark object
             const bookmark = {
                 id: Date.now(),
-                timestamp: new Date().toISOString(),
                 conversation: {
                     user: {
                         content: userContent,
@@ -373,33 +548,31 @@ class ChatManager {
                     assistant: {
                         content: assistantContent,
                         role: 'assistant',
-                        metadata: {
-                            timestamp: timestamp,
-                            model: model
-                        }
+                        metadata: metadata
                     }
                 }
             };
 
-            // Save to localStorage
-            const existingBookmarks = localStorage.getItem('chatBookmarks');
-            let bookmarks = existingBookmarks ? JSON.parse(existingBookmarks) : [];
-            bookmarks.unshift(bookmark);
-            localStorage.setItem('chatBookmarks', JSON.stringify(bookmarks));
+            // Get existing bookmarks
+            const bookmarks = JSON.parse(localStorage.getItem('chatBookmarks') || '[]');
+            
+            // Check for duplicate
+            const isDuplicate = bookmarks.some(b => 
+                b.conversation.user.content === userContent &&
+                b.conversation.assistant.content === assistantContent
+            );
 
-            console.log('Saved bookmark:', bookmark);
-            console.log('All bookmarks:', bookmarks);
-
-            this.showNotification('Conversation saved to bookmarks', 'success');
-
-            // Update bookmarks display if panel is open
-            const bookmarksSheet = document.getElementById('bookmarks-sheet');
-            if (bookmarksSheet && bookmarksSheet.classList.contains('show')) {
-                if (window.bookmarkManager) {
-                    window.bookmarkManager.updateBookmarksList();
-                }
+            if (isDuplicate) {
+                console.log('Conversation already bookmarked');
+                this.showNotification('Already saved to bookmarks', 'info');
+                return false;
             }
 
+            // Add new bookmark
+            bookmarks.push(bookmark);
+            localStorage.setItem('chatBookmarks', JSON.stringify(bookmarks));
+            
+            this.showNotification('Saved to bookmarks', 'success');
             return true;
         } catch (error) {
             console.error('Error saving bookmark:', error);
@@ -421,9 +594,5 @@ class ChatManager {
     }
 }
 
-// Make ChatManager available in both browser and Node.js environments
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = ChatManager;
-} else if (typeof window !== 'undefined') {
-    window.ChatManager = ChatManager;
-}
+// Make ChatManager available globally
+window.ChatManager = ChatManager;

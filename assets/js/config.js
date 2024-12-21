@@ -29,25 +29,21 @@ async function initConfig() {
     try {
         console.log('Initializing server configuration...');
         const baseUrl = await getServerBaseUrl();
-        
-        // Set the base URL
         window.CONFIG.api.baseUrl = baseUrl;
-        console.log('Server URL initialized:', baseUrl);
-        
-        // Test the connection
-        const healthResponse = await fetch(`${baseUrl}/health`);
-        if (!healthResponse.ok) {
-            throw new Error('Server health check failed');
-        }
-        
-        // Dispatch success event
+        console.log('Server configuration initialized:', window.CONFIG);
         window.dispatchEvent(new Event('configReady'));
         return window.CONFIG;
     } catch (error) {
         console.error('Failed to initialize server URL:', error);
-        window.dispatchEvent(new CustomEvent('configError', { 
-            detail: error.message 
-        }));
+        // Show a user-friendly error message
+        const errorMessage = document.createElement('div');
+        errorMessage.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #ff5252; color: white; padding: 10px 20px; border-radius: 4px; z-index: 9999;';
+        errorMessage.textContent = 'Could not connect to server. Please ensure the backend is running.';
+        document.body.appendChild(errorMessage);
+        
+        // Remove the message after 5 seconds
+        setTimeout(() => errorMessage.remove(), 5000);
+        
         throw error;
     }
 }
